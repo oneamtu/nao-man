@@ -104,6 +104,13 @@
 #include "Common.h"             // For ROUND
 #include "VisionDef.h"          // For camera parameters
 #include "Kinematics.h"         // For physical body parameters
+#include "VisualLandmark.h"
+#include "ConcreteLandmark.h"
+#include "ConcreteLine.h"
+#include "VisualLine.h"
+#include "CameraCalibrate.h"
+//#include "Matrix.h"
+//#include "Matrix4.h"
 
 #include "Sensors.h"
 #include "Structs.h"
@@ -128,6 +135,7 @@ protected: // Constants
     static const float IMAGE_WIDTH_MM;
     static const float IMAGE_HEIGHT_MM;
     static const float FOCAL_LENGTH_MM;
+    static const float FOCAL_LENGTH;
     static const float MM_TO_PIX_X;
     static const float MM_TO_PIX_Y;
     static const float PIX_X_TO_MM;
@@ -161,6 +169,10 @@ public:
     const estimate pixEstimate(const int pixelX, const int pixelY,
                                const float objectHeight);
     const estimate bodyEstimate(const int x, const int y, const float dist);
+
+    std::vector<VisualLine> NaoPose::getExpectedVisualLinesFromFieldPosition(float x, float y, float robotAngle);
+
+    const boost::numeric::ublas::vector <float> NaoPose::worldPointToPixel(boost::numeric::ublas::vector <float> point);
 
     /********** Getters **********/
     const int getHorizonY(const int x) const;
@@ -219,6 +231,9 @@ protected: // members
     float horizonSlope,perpenHorizonSlope;;
     point3 <float> focalPointInWorldFrame;
     float comHeight; // center of mass height in mm
+	float cameraHeight; // the height of the camera from the ground;
+	float cameraAngle; // the angle between the camera focus line and the ground (horizon line)
+	boost::numeric::ublas::vector<float> cameraCoords;
     // In this array we hold the matrix transformation which takes us from the
     // originn to the end of each chain of the body.
     boost::numeric::ublas::matrix <float>
@@ -228,6 +243,8 @@ protected: // members
     boost::numeric::ublas::matrix <float> cameraToWorldFrame;
     // Current hack for better beraing est
     boost::numeric::ublas::matrix <float> cameraToBodyTransform;
+
+    boost::numeric::ublas::matrix <float> cameraToWorldRotation;
 };
 
 #endif
