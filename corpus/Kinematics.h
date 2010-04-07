@@ -260,29 +260,29 @@ namespace Kinematics {
     };
 
     //                                  (alpha,  a ,  theta ,   d  )
-    const float HEAD_MDH_PARAMS[2][4] = {{0.0f , 0.0f,  0.0f , 0.0f},
+    static const float HEAD_MDH_PARAMS[2][4] = {{0.0f , 0.0f,  0.0f , 0.0f},
                                          {-M_PI_FLOAT/2, 0.0f, -M_PI_FLOAT/2 , 0.0f}};
 
-    const float LEFT_ARM_MDH_PARAMS[4][4] = {{-M_PI_FLOAT/2,0.0f,0.0f,0.0f},
+    static const float LEFT_ARM_MDH_PARAMS[4][4] = {{-M_PI_FLOAT/2,0.0f,0.0f,0.0f},
                                              { M_PI_FLOAT/2,0.0f,M_PI_FLOAT/2,0.0f},
                                              { M_PI_FLOAT/2,0.0f,0.0f,UPPER_ARM_LENGTH},
                                              {-M_PI_FLOAT/2,0.0f,0.0f,0.0f}};
 
-    const float LEFT_LEG_MDH_PARAMS[6][4] = {{ -3*M_PI_FLOAT/4, 0.0f,  -M_PI_FLOAT/2, 0.0f},
+    static const float LEFT_LEG_MDH_PARAMS[6][4] = {{ -3*M_PI_FLOAT/4, 0.0f,  -M_PI_FLOAT/2, 0.0f},
                                              { -M_PI_FLOAT/2,   0.0f,   M_PI_FLOAT/4, 0.0f},
                                              { M_PI_FLOAT/2,    0.0f,     0.0f, 0.0f},
                                              {   0.0f,-THIGH_LENGTH,0.0f, 0.0f},
                                              {   0.0f,-TIBIA_LENGTH,0.0f, 0.0f},
                                              {-M_PI_FLOAT/2,    0.0f,     0.0f, 0.0f}};
 
-    const float RIGHT_LEG_MDH_PARAMS[6][4]= {{ -M_PI_FLOAT/4,  0.0f,   -M_PI_FLOAT/2, 0.0f},
+    static const float RIGHT_LEG_MDH_PARAMS[6][4]= {{ -M_PI_FLOAT/4,  0.0f,   -M_PI_FLOAT/2, 0.0f},
                                              { -M_PI_FLOAT/2,   0.0f,  -M_PI_FLOAT/4, 0.0f},
                                              {  M_PI_FLOAT/2,    0.0f,    0.0f, 0.0f},
                                              { 0.0f,-THIGH_LENGTH,0.0f, 0.0f},
                                              {0.0f,-TIBIA_LENGTH,0.0f,0.0f},
                                              {-M_PI_FLOAT/2,0.0f,0.0f,0.0f}};
 
-    const float RIGHT_ARM_MDH_PARAMS[4][4] = {{-M_PI_FLOAT/2, 0.0f,0.0f,0.0f},
+    static const float RIGHT_ARM_MDH_PARAMS[4][4] = {{-M_PI_FLOAT/2, 0.0f,0.0f,0.0f},
                                               { M_PI_FLOAT/2, 0.0f,M_PI_FLOAT/2,0.0f},
                                               { M_PI_FLOAT/2, 0.0f,0.0f,UPPER_ARM_LENGTH},
                                               {-M_PI_FLOAT/2, 0.0f,0.0f,0.0f}};
@@ -327,12 +327,15 @@ namespace Kinematics {
       &RIGHT_ARM_BASE_TRANSFORMS[0] };
 
     //Base transforms to get from body center to beg. of chain
-    static const boost::numeric::ublas::matrix <float> HEAD_END_TRANSFORMS[4]
+    static const boost::numeric::ublas::matrix <float> HEAD_END_TRANSFORMS[6]
     = { CoordFrame4D::rotation4D(CoordFrame4D::X_AXIS, M_PI_FLOAT/2),
         CoordFrame4D::rotation4D(CoordFrame4D::Y_AXIS,M_PI_FLOAT/2),
         CoordFrame4D::translation4D(CAMERA_OFF_X, 0, CAMERA_OFF_Z),
-        CoordFrame4D::rotation4D(CoordFrame4D::Y_AXIS, CAMERA_PITCH_ANGLE) };
-
+        boost::numeric::ublas::identity_matrix <float> (4),
+        CoordFrame4D::rotation4D(CoordFrame4D::Y_AXIS, CAMERA_PITCH_ANGLE),
+        boost::numeric::ublas::identity_matrix <float> (4),};
+//Z_AXIS and X_AXIS transforms are identity transforms because we need them to match up with the calibrate transforms
+//see CameraCalibrate
 
     static const boost::numeric::ublas::matrix <float> LEFT_ARM_END_TRANSFORMS[2]
     = { CoordFrame4D::rotation4D(CoordFrame4D::Z_AXIS, -M_PI_FLOAT/2),
@@ -364,7 +367,7 @@ namespace Kinematics {
       &RIGHT_LEG_END_TRANSFORMS[0],
       &RIGHT_ARM_END_TRANSFORMS[0] };
     static const int NUM_BASE_TRANSFORMS[NUM_CHAINS] = {1,1,1,1,1};
-    static const int NUM_END_TRANSFORMS[NUM_CHAINS] = {4,2,3,3,2};
+    static const int NUM_END_TRANSFORMS[NUM_CHAINS] = {6,2,3,3,2};
     static const int NUM_JOINTS_CHAIN[NUM_CHAINS] = {2,4,6,6,4};
 
     //locally expressed constants (with respect to an individual joint

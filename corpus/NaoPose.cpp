@@ -27,6 +27,7 @@ using namespace boost::numeric;
 using namespace Kinematics;
 using namespace NBMath;
 using namespace CoordFrame4D;
+//using namespace CoordFrame3D;
 
 // From camera docs:
 const float NaoPose::IMAGE_WIDTH_MM = 2.36f;
@@ -34,6 +35,7 @@ const float NaoPose::IMAGE_HEIGHT_MM = 1.76f;
 
 // Calculated from numbers in camera docs:
 const float NaoPose::FOCAL_LENGTH_MM = (float)((IMAGE_WIDTH_MM/2) / tan(FOV_X/2));
+const float NaoPose::FOCAL_LENGTH = 385.54;
   // e.g. 3 mm * mm_to_pix = 176 pixels
   const float NaoPose::MM_TO_PIX_X = IMAGE_WIDTH/IMAGE_WIDTH_MM;
   const float NaoPose::MM_TO_PIX_Y = IMAGE_HEIGHT/IMAGE_HEIGHT_MM;
@@ -64,7 +66,7 @@ const ublas::vector <float> NaoPose::bottomRight = vector4D(FOCAL_LENGTH_MM,
 							    -IMAGE_WIDTH_MM/2,
 							    -IMAGE_HEIGHT_MM/2);
 
-NaoPose::NaoPose (shared_ptr<Sensors> s)
+NaoPose::NaoPose (boost::shared_ptr<Sensors> s)
     : bodyInclinationX(0.0f), bodyInclinationY(0.0f),
       sensors(s),
       horizonLeft(0,0), horizonRight(0,0),
@@ -148,8 +150,8 @@ void NaoPose::transform () {
   bodyInclinationY = inertial.angleY;
 
   ublas::matrix <float> bodyToWorldTransform =
-      prod(CoordFrame4D::rotation4D(CoordFrame4D::X_AXIS, bodyInclinationX),
-      CoordFrame4D::rotation4D(CoordFrame4D::Y_AXIS, bodyInclinationY));
+      prod(CoordFrame4D::rotation4D(CoordFrame4D::Y_AXIS, bodyInclinationY),
+      CoordFrame4D::rotation4D(CoordFrame4D::X_AXIS, bodyInclinationX));
 
   ublas::vector <float> torsoLocationInLegFrame =
     prod(bodyToWorldTransform, supportLegLocation);
@@ -157,12 +159,16 @@ void NaoPose::transform () {
   comHeight = -torsoLocationInLegFrame[Z];
 
   cameraToWorldFrame = prod(bodyToWorldTransform, cameraToBodyTransform);
+  cameraToWorldRotation = ublas::matrix<float>(cameraToWorldFrame);
+  cameraToWorldRotation(0,3) = 0;
+  cameraToWorldRotation(1,3) = 0;
+  cameraToWorldRotation(2,3) = 0;
+  //<<cameraToWorldFrame<<endl<<cameraToWorldRotation<<endl;
 
   calcImageHorizonLine();
   focalPointInWorldFrame.x = cameraToWorldFrame(X,3);
   focalPointInWorldFrame.y = cameraToWorldFrame(Y,3);
   focalPointInWorldFrame.z = cameraToWorldFrame(Z,3);
-
 }
 
 /**
@@ -301,13 +307,13 @@ const estimate NaoPose::pixEstimate(const int pixelX, const int pixelY,
   }
   // declare x,y,z coordinate of pixel in relation to focal point
   ublas::vector <float> pixelInCameraFrame =
-    vector4D(FOCAL_LENGTH_MM,
-			 ((float)IMAGE_CENTER_X - (float)pixelX) * (float)PIX_X_TO_MM,
-			 ((float)IMAGE_CENTER_Y - (float)pixelY) * (float)PIX_Y_TO_MM);
+    vector4D(FOCAL_LENGTH_MM,((float)IMAGE_CENTER_X - (float)pixelX) * (float)PIX_X_TO_MM,
+             ((float)IMAGE_CENTER_Y - (float)pixelY) * (float)PIX_Y_TO_MM);
 
   // declare x,y,z coordinate of pixel in relation to body center
   ublas::vector <float> pixelInWorldFrame(4);
 
+  
   // transform camera coordinates to body frame coordinates for a test pixel
   pixelInWorldFrame = prod(cameraToWorldFrame, pixelInCameraFrame);
 
@@ -349,8 +355,103 @@ const estimate NaoPose::pixEstimate(const int pixelX, const int pixelY,
   }
 
   estimate est = getEstimate(objectInWorldFrame);
-  est.dist = correctDistance(static_cast<float>(est.dist) );
+  //est.dist = correctDistance(static_cast<float>(est.dist) );
 
+  // declare x,y,z coordinate of pixel in relation to focal point
+  pixelInCameraFrame =
+    vector4D( FOCAL_LENGTH,
+             ((float)IMAGE_CENTER_X - (float)pixelX),
+             ((float)IMAGE_CENTER_Y - (float)pixelY));
+
+  ublas::vector <float> cameraToWorldTrans(4);
+  
+  cameraToWorldTrans(0) = cameraToWorldFrame(0,3);
+  cameraToWorldTrans(1) = cameraToWorldFrame(1,3);
+  cameraToWorldTrans(2) = cameraToWorldFrame(2,3);
+  cameraToWorldTrans(3) = cameraToWorldFrame(3,3);
+
+  // transform camera coordinates to body frame coordinates for a test pixel
+  pixelInWorldFrame = prod(cameraToWorldRotation, pixelInCameraFrame);
+
+  //cout<<"pixel coords "<<pixelInWorldFrame(0)<<" "<<pixelInWorldFrame(1)<<" " <<pixelInWorldFrame(2)<<endl;
+
+  float alpha = - sqrt((pixelInWorldFrame(X)*pixelInWorldFrame(X)) + (pixelInWorldFrame(Y)*pixelInWorldFrame(Y))) / 
+      pixelInWorldFrame(Z);
+
+  float beta = atan(pixelInWorldFrame(Y) / pixelInWorldFrame(X));
+
+  float distance = alpha * (focalPointInWorldFrame.z + comHeight);
+
+  float distX = cos(beta)*distance + focalPointInWorldFrame.x;
+  float distY = sin(beta)*distance + focalPointInWorldFrame.y;
+
+  float dist = sqrt(distX*distX + distY*distY);
+
+  //cout<<"dist :"<<distX<<" "<<distY<<" "<<dist<<endl;
+
+  //Octavian's attempt at pix Estimate 
+  /*
+  float distanceX, distanceY, angleY, angleX;
+
+  angleX =
+    atan2(pixelInWorldFrame(Y),pixelInWorldFrame(X));
+  
+  angleY =
+    atan2(
+    cameraCoords(X) - pixelInWorldFrame(X),
+	cameraCoords(Z)- pixelInWorldFrame(Z)
+    );
+  
+  // declare x,y,z coordinate of pixel in relation to focal point
+  pixelInCameraFrame =
+    vector4D( -FOCAL_LENGTH_MM,
+			 ((float)pixelX - (float)IMAGE_CENTER_X) * (float)PIX_X_TO_MM,
+			 ((float)IMAGE_CENTER_Y - (float)pixelY) * (float)PIX_Y_TO_MM);
+  
+
+  // transform camera coordinates to body frame coordinates for a test pixel
+  pixelInWorldFrame = prod(cameraToWorldFrame, pixelInCameraFrame);
+
+
+  ublas::vector <float> imageCenterInCameraFrame =
+    vector4D(-FOCAL_LENGTH_MM,
+			 0,
+			 0);
+
+  // declare x,y,z coordinate of pixel in relation to body center
+  ublas::vector <float> imageCenterInWorldFrame(4);
+
+  // transform camera coordinates to body frame coordinates for a test pixel
+  imageCenterInWorldFrame = prod(cameraToWorldFrame, imageCenterInCameraFrame);
+
+  /*float angleGamma = -atan((imageCenterInWorldFrame(X) - focalPointInWorldFrame.x)/
+      (imageCenterInWorldFrame(Z) - focalPointInWorldFrame.z));
+  float distY = tan(angleGamma) * (focalPointInWorldFrame.z + comHeight) + focalPointInWorldFrame.x;
+  float l = (focalPointInWorldFrame.z + comHeight) / cos(angleGamma);
+  float angleAlpha = (((float)IMAGE_CENTER_Y - (float)pixelY) / 
+      (IMAGE_HEIGHT/2))*FOV_Y/2;
+  float angleBeta = -atan((pixelInWorldFrame(Z) - focalPointInWorldFrame.z) / 
+      (pixelInWorldFrame(X) - focalPointInWorldFrame.x));
+  float d1 = sin(angleAlpha) * (l + FOCAL_LENGTH_MM) / sin(M_PI - angleAlpha - M_PI/2 - angleBeta);
+  cout<<"distY "<<distY<<endl;
+  cout<<"dist "<<distY + d1;*/
+  /*
+  point3 <float> newPix;
+  newPix.x = pixelInWorldFrame(X) + (focalPointInWorldFrame.x - imageCenterInWorldFrame(X));
+  newPix.y = pixelInWorldFrame(Y) + (focalPointInWorldFrame.y - imageCenterInWorldFrame(Y));
+  newPix.z = pixelInWorldFrame(Z) + (focalPointInWorldFrame.z - imageCenterInWorldFrame(Z));
+  float angleAlpha = -atan(sqrt((newPix.x - imageCenterInWorldFrame(X))*(newPix.x - imageCenterInWorldFrame(X)) + 
+      (newPix.y - imageCenterInWorldFrame(Y))*(newPix.y - imageCenterInWorldFrame(Y)))/(newPix.z - imageCenterInWorldFrame(Z)));
+
+
+  float distance = (comHeight + newPix.z)*tan(angleAlpha) + newPix.x;
+  //cout<<"CamCoords: x "<<focalPointInWorldFrame.x<<" y "<<focalPointInWorldFrame.y<<" z "<<focalPointInWorldFrame.z<<endl;
+  //cout<<"PixelCoords: x "<<pixelInWorldFrame(X)<<" y "<<pixelInWorldFrame(Y)<<" z "<<pixelInWorldFrame(Z)<<endl;
+  //cout<<"NewPix: x "<<newPix.x<<" y "<<newPix.y<<" z "<<newPix.z<<endl;
+  //cout<<"CenterInWd: x "<<imageCenterInWorldFrame(X)<<" y "<<imageCenterInWorldFrame(Y)<<" z "<<imageCenterInWorldFrame(Z)<<endl;
+  cout<<"AngleA: "<<angleAlpha/TO_RAD<<endl;
+  cout<<"Octavian distance: "<<distance<<endl;
+*/
   return est;
 }
 
@@ -445,13 +546,15 @@ estimate NaoPose::getEstimate(ublas::vector <float> objInWorldFrame){
 
 const ublas::matrix <float>
 NaoPose::calculateForwardTransform(const ChainID id,
-				   const std::vector <float> &angles) {
+                       const std::vector <float> &angles) {
   ublas::matrix <float> fullTransform = ublas::identity_matrix <float> (4);
 
   // Do base transforms
   const int numBaseTransforms = NUM_BASE_TRANSFORMS[id];
   for (int i = 0; i < numBaseTransforms; i++) {
     fullTransform = prod(fullTransform, BASE_TRANSFORMS[id][i]);
+    if (id == HEAD_CHAIN)
+        fullTransform = prod(fullTransform, CameraCalibrate::CALIBRATE_HEAD_BASE_TRANSFORMS[i]);
   }
 
   // Do mDH transforms
@@ -466,37 +569,43 @@ NaoPose::calculateForwardTransform(const ChainID id,
     //length L - movement along the X(i-1) axis
     if (currentmDHParameters[i*4 + L] != 0) {
       const ublas::matrix <float> transX =
-	CoordFrame4D::translation4D(currentmDHParameters[i*4 + L],0.0f,0.0f);
+    CoordFrame4D::translation4D(currentmDHParameters[i*4 + L],0.0f,0.0f);
       fullTransform = prod(fullTransform, transX);
     }
 
     //twist: - rotate about the X(i-1) axis
     if (currentmDHParameters[i*4 + ALPHA] != 0) {
       const ublas::matrix <float> rotX =
-	CoordFrame4D::rotation4D(CoordFrame4D::X_AXIS,
-			       currentmDHParameters[i*4 + ALPHA]);
+    CoordFrame4D::rotation4D(CoordFrame4D::X_AXIS,
+                   currentmDHParameters[i*4 + ALPHA]);
       fullTransform = prod(fullTransform, rotX);
     }
+    
     //theta - rotate about the Z(i) axis
-    if (currentmDHParameters[i*4 + THETA] + angles[i] != 0) {
+    float angleTheta = currentmDHParameters[i*4 + THETA] + angles[i];
+    if (id == HEAD_CHAIN){ //add the calibration for the head chain
+        angleTheta += CameraCalibrate::CALIBRATE_HEAD_MDH_ANGLES[i];
+    }
+
+    if (angleTheta != 0) {
       const ublas::matrix <float> rotZ =
-	CoordFrame4D::rotation4D(CoordFrame4D::Z_AXIS,
-			       currentmDHParameters[i*4 + THETA] +
-			       angles[i]);
+    CoordFrame4D::rotation4D(CoordFrame4D::Z_AXIS, angleTheta);
       fullTransform = prod(fullTransform, rotZ);
     }
     //offset D movement along the Z(i) axis
     if (currentmDHParameters[i*4 + D] != 0) {
       const ublas::matrix <float> transZ =
-	CoordFrame4D::translation4D(0.0f,0.0f,currentmDHParameters[i*4 + D]);
+    CoordFrame4D::translation4D(0.0f,0.0f,currentmDHParameters[i*4 + D]);
       fullTransform = prod(fullTransform, transZ);
-    }
+    }  
   }
 
   // Do the end transforms
   const int numEndTransforms = NUM_END_TRANSFORMS[id];
   for (int i = 0; i < numEndTransforms; i++) {
     fullTransform = prod(fullTransform, END_TRANSFORMS[id][i]);
+    if (id == HEAD_CHAIN)
+        fullTransform = prod(fullTransform, CameraCalibrate::CALIBRATE_HEAD_END_TRANSFORMS[i]);
   }
 
   return fullTransform;
@@ -534,4 +643,93 @@ const float NaoPose::pixHeightToDistance(float pixHeight, float cmHeight) const
 const float NaoPose::pixWidthToDistance(float pixWidth, float cmWidth) const
 {
     return (FOCAL_LENGTH_MM / (pixWidth * PIX_X_TO_MM)) * cmWidth;
+}
+
+/**
+ * Camera Calibrate.
+ *
+ **/
+std::vector<VisualLine> NaoPose::getExpectedVisualLinesFromFieldPosition(float x, float y, float robotAngle) {
+    
+    std::vector<VisualLine> visualLines;
+    //translation from the world origin to the robot origin
+    ublas::matrix <float> worldOriginToRobotOriginTranslation = CoordFrame3D::translation3D(-x, -y);
+    //rotation around the angle the robot is oriented relative to the world origin
+    ublas::matrix <float> worldToRobotRotation = CoordFrame3D::rotation3D(CoordFrame3D::Z_AXIS, robotAngle);
+
+    for (list <const ConcreteLine*>::const_iterator i = ConcreteLine::concreteLines.begin(); 
+        i != ConcreteLine::concreteLines.end(); i++) {
+
+            //cout<<(*i)->toString()<<endl;
+            ublas::vector <float> linePoint1 = CoordFrame3D::vector3D((**i).getFieldX1(), (**i).getFieldY1());
+            //get the line point in the robot coordinate system
+            linePoint1 = prod(worldOriginToRobotOriginTranslation, linePoint1);
+            linePoint1 = prod(worldToRobotRotation, linePoint1);
+            //if (linePoint1(X) < 0) continue;
+
+            ublas::vector <float> pixel1 = worldPointToPixel(linePoint1);
+            linePoint visualLinePoint1;
+            visualLinePoint1.x = pixel1(X);
+            visualLinePoint1.y = pixel1(Y);
+            
+            ublas::vector <float> linePoint2 = CoordFrame3D::vector3D((**i).getFieldX2(), (**i).getFieldY2());
+            //get the line point in the robot coordinate system
+            linePoint2 = prod(worldOriginToRobotOriginTranslation, linePoint2);
+            linePoint2 = prod(worldToRobotRotation, linePoint2);
+            //if (linePoint2(X) < 0) continue;
+
+            ublas::vector <float> pixel2 = worldPointToPixel(linePoint2);
+            linePoint visualLinePoint2;
+            visualLinePoint2.x = pixel2(X);
+            visualLinePoint2.y = pixel2(Y);
+
+           // if ((linePoint1(X) < 0) && (linePoint2(X) < 0)) continue;
+            //if (x == 0 && y == 0) continue;
+            list<linePoint> visualLinePoints;
+            if (pixel1(X) != 0 && pixel1(Y) != 0)
+            visualLinePoints.push_back(visualLinePoint1);
+            if (pixel2(X) != 0 && pixel2(Y) != 0)
+            visualLinePoints.push_back(visualLinePoint2);
+            if (visualLinePoints.size() > 0){
+            VisualLine visualLine = VisualLine(visualLinePoints);
+            visualLines.push_back(visualLine);}
+    }
+
+    return visualLines;
+}
+
+
+/**
+ * worldPointToPixel
+ * gets a point from the world coordinate and transforms it into a pixel in the camera image
+ * @params point - the coordinates of the point in a vector
+ * @return image coordinates
+**/
+const ublas::vector <float> NaoPose::worldPointToPixel(ublas::vector <float> point) {
+    
+    ublas::vector <float> pointVectorInWorldFrame = CoordFrame4D::vector4D(point(X) * CM_TO_MM, 
+        point(Y) * CM_TO_MM, -comHeight);
+    //transform it from the world frame to the camera frame
+    pointVectorInWorldFrame(X) = pointVectorInWorldFrame(X) - focalPointInWorldFrame.x;
+    pointVectorInWorldFrame(Y) = pointVectorInWorldFrame(Y) - focalPointInWorldFrame.y;
+    pointVectorInWorldFrame(Z) = pointVectorInWorldFrame(Z) - focalPointInWorldFrame.z;
+
+    pointVectorInWorldFrame = prod(trans(cameraToWorldRotation), pointVectorInWorldFrame);
+
+    //cout<<cameraToWorldRotation<<endl;//<<trans(cameraToWorldRotation)<<endl;
+
+    float t = FOCAL_LENGTH / pointVectorInWorldFrame(X);
+    //cout<<t<<endl;
+    //cout<<point(X)<<" "<<point(Y)<<" "<<point(Z)<<endl;
+
+    float x = -(t * pointVectorInWorldFrame(Y)) + IMAGE_CENTER_X;
+    float y = -(t * pointVectorInWorldFrame(Z)) + IMAGE_CENTER_Y;
+    //cout<<x<<" "<<y<<" "<<endl;
+    /*float a[2][2] = {{0., 1.}, {2., 3.}};
+    Matrix<float> matrix(a);
+    cout<<matrix;
+*/
+    if (t < 0) {x = 0;  y = 0;}
+    return CoordFrame3D::vector3D(x, y);
+    
 }
