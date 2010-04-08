@@ -170,9 +170,9 @@ public:
                                const float objectHeight);
     const estimate bodyEstimate(const int x, const int y, const float dist);
 
-    std::vector<VisualLine> NaoPose::getExpectedVisualLinesFromFieldPosition(float x, float y, float robotAngle);
+    std::vector<VisualLine> getExpectedVisualLinesFromFieldPosition(float x, float y, float robotAngle);
 
-    const boost::numeric::ublas::vector <float> NaoPose::worldPointToPixel(boost::numeric::ublas::vector <float> point);
+    const boost::numeric::ublas::vector <float> worldPointToPixel(boost::numeric::ublas::vector <float> point);
 
     /********** Getters **********/
     const int getHorizonY(const int x) const;

@@ -346,10 +346,10 @@ void Field::findFieldEdges(int poseHorizon) {
  */
 
 void Field::findConvexHull(int pH) {
-	int RUNSIZE = 3;
-	int SCANSIZE = 10;
-	int NOISE = 2;
-	int HULLS = IMAGE_WIDTH / SCANSIZE + 1;
+	const int RUNSIZE = 3;
+	const int SCANSIZE = 10;
+	const int NOISE = 2;
+	const int HULLS = IMAGE_WIDTH / SCANSIZE + 1;
 
 	int good, ok, top;
 	unsigned char pixel;
