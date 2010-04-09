@@ -3,12 +3,12 @@
 //TODO: introduce an unified configure file system
 
 #ifdef ROBOT_NAME_trillian
-float CameraCalibrate::CAMERA_CALIBRATE[CameraCalibrate::NUM_PARAMS] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+float CameraCalibrate::CAMERA_CALIBRATE[CameraCalibrate::NUM_PARAMS] = {0.05f, 0.00f, -0.02f, 50.0f, 80.0f, -100.0f, -0.08f, 0.0f, 0.0f};
 #else
 #ifdef ROBOT_NAME_marvin
 float CameraCalibrate::CAMERA_CALIBRATE[CameraCalibrate::NUM_PARAMS] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 #else
-float CameraCalibrate::CAMERA_CALIBRATE[CameraCalibrate::NUM_PARAMS] = {0, 0, 0, 0, 0, 0.1, 0, 0, 0};
+float CameraCalibrate::CAMERA_CALIBRATE[CameraCalibrate::NUM_PARAMS] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 #endif
 #endif
 
